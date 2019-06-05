@@ -1,0 +1,220 @@
+create table estudiante
+  (nombres varchar (20) not null,
+  apellidos varchar (20) not null,
+  id int,
+   creditosAprobados int default 0,
+  primary key (id)
+);
+  
+create table curso
+  (curso_cod varchar (7),
+  nombre varchar (50),
+  nombre_unid varchar (20),
+  creditos int,
+  primary key (curso_cod)
+);
+ 
+create table estCursos
+  (estID int,
+  curso_cod varchar (7),
+  nota numeric(2,1),
+  primary key (estID, curso_cod),
+   foreign key (estID) references estudiante(id),
+   foreign key (curso_cod) references curso(curso_cod)
+);
+ 
+CREATE OR REPLACE FUNCTION agregarCreditosAprobados()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF new.nota > 3 THEN
+    UPDATE estudiante
+	  SET creditosAprobados = creditosAprobados + 
+	    (SELECT creditos FROM curso WHERE curso_cod = new.curso_cod)
+	  WHERE id = new.estID;  
+  END IF;
+  RETURN new; 
+END;
+$$
+LANGUAGE 'plpgsql';
+
+CREATE TRIGGER agregarCreditosAprobados 
+AFTER INSERT ON estCursos
+FOR EACH ROW 
+EXECUTE PROCEDURE agregarCreditosAprobados(); 
+
+
+DROP TRIGGER agregarCreditosAprobados ON estCursos;
+ 
+ 
+insert into curso values('000', 'programacion', 'MACC', 4 );
+insert into curso values('001', 'arquitectura', 'MACC', 4 );
+insert into curso values('002', 'algoritmos', 'MACC', 4 );
+insert into curso values('100', 'micro1', 'ECON', 4 );
+insert into curso values('101', 'micro2', 'ECON', 4 );
+insert into curso values('102', 'micro3', 'ECON', 4 );
+
+insert into estudiante values('Juan', 'Perez', 8888);
+insert into estudiante values('Ana', 'Gutierrez', 5555);
+insert into estudiante values('Ernesto', 'Huertas', 2222);
+insert into estudiante values('Alejandra', 'Rivas', 3333);
+
+delete from estCursos 
+where estID = 8888 and curso_cod = '000';
+
+insert into estCursos values(8888, '000', 4.2);
+insert into estCursos values(5555, '000', 3.6);
+insert into estCursos values(5555, '001', 4.8);
+insert into estCursos values(3333, '001', 3.3);
+insert into estCursos values(3333, '002', 3.3);
+insert into estCursos values(5555, '002', 2.7);
+
+select * from estudiante order by id;
+select * from estCursos order by estID, curso_cod;
+
+----
+--drop table estCursos;
+
+CREATE OR REPLACE FUNCTION cambiarNota()
+RETURNS TRIGGER AS $$
+BEGIN
+  DELETE FROM estCursos
+  WHERE estID = new.estID and curso_cod = new.curso_cod;
+  RETURN new; 
+END;
+$$
+LANGUAGE 'plpgsql';
+
+CREATE TRIGGER cambiarNota 
+BEFORE INSERT ON estCursos
+FOR EACH ROW 
+EXECUTE PROCEDURE cambiarNota(); 
+
+
+insert into estCursos values(5555, '002', 4.2);
+
+---------
+drop table estCursos;
+drop table curso;
+
+create table curso
+  (curso_cod varchar (7),
+  nombre varchar (50),
+  nombre_unid varchar (20),
+  creditos int,
+  prereq varchar (7), 
+  primary key (curso_cod)
+);
+
+create table estCursos
+  (estID int,
+  curso_cod varchar (7),
+  nota numeric(2,1),
+  primary key (estID, curso_cod),
+   foreign key (estID) references estudiante(id),
+   foreign key (curso_cod) references curso(curso_cod)
+);
+
+insert into curso values('000', 'programacion', 'MACC', 4, null );
+insert into curso values('001', 'arquitectura', 'MACC', 4, null );
+insert into curso values('002', 'algoritmos', 'MACC', 4, '001' );
+insert into curso values('100', 'micro1', 'ECON', 4, null );
+insert into curso values('101', 'micro2', 'ECON', 4, '101' );
+insert into curso values('102', 'micro3', 'ECON', 4, '102' );
+
+insert into estCursos values(8888, '000', 4.2);
+insert into estCursos values(5555, '000', 3.6);
+insert into estCursos values(5555, '001', 4.8);
+insert into estCursos values(5555, '002', 2.7);
+insert into estCursos values(3333, '001', 3.3);
+insert into estCursos values(3333, '002', 3.3);
+
+WITH lista_prereq(curso_cod, prereq) AS (
+    SELECT curso_cod, prereq
+    FROM curso
+)
+SELECT * FROM lista_prereq
+WHERE prereq = '001';
+
+
+
+
+
+WITH RECURSIVE lista_prereq(curso_cod, prereq) AS (
+    SELECT curso_cod, prereq
+    FROM curso
+  UNION
+    SELECT curso.prereq, lista_prereq.curso_cod
+	FROM curso, lista_prereq
+	WHERE curso.curso_cod = lista_prereq.prereq
+)
+SELECT * FROM lista_prereq;
+
+
+--------
+----ranquin
+select estID, nota, 
+  rank() over (order by (nota) desc) as pos 
+from estCursos;
+
+select estID, nota, 
+  rank() over (order by (nota) desc) as pos
+from estCursos
+order by pos;
+
+select estID, nota, 
+  rank() over (order by (nota) desc) as pos
+from estCursos
+order by pos
+limit 3;
+
+select curso_cod, estID, nota,  
+  rank() over (partition by curso_cod order by (nota) desc) as pos 
+from estCursos
+order by curso_cod, pos;
+
+select curso_cod, estID, nota,  
+  rank() over (partition by curso_cod order by (nota) desc) as pos 
+from estCursos
+order by curso_cod, pos;
+
+select estID, nota, 
+  ntile(4) over (partition by curso_cod order by (nota) desc) as cuartil
+from estCursos;
+
+select curso_cod, estID, nota, 
+  ntile(4) over (partition by curso_cod order by (nota) desc) as cuartil
+from estCursos
+order by curso_cod;
+
+---
+
+create table totalInscritos
+  (fecha date,
+  nombre_unid varchar (20),
+  inscritos int,
+  primary key (fecha)
+);
+
+insert into totalInscritos values('01-10-2018', 'MACC', 2);
+insert into totalInscritos values('02-10-2018', 'MACC', 0);
+insert into totalInscritos values('03-10-2018', 'MACC', 3);
+insert into totalInscritos values('04-10-2018', 'MACC', 1);
+insert into totalInscritos values('05-10-2018', 'MACC', 2);
+insert into totalInscritos values('06-10-2018', 'MACC', 0);
+insert into totalInscritos values('07-10-2018', 'MACC', 0);
+insert into totalInscritos values('08-10-2018', 'MACC', 1);
+insert into totalInscritos values('09-10-2018', 'MACC', 4);
+insert into totalInscritos values('10-10-2018', 'MACC', 3);
+
+select fecha, 
+  avg(inscritos) over(order by fecha rows 3 preceding)
+    as prom_inscritos_3dias
+from totalInscritos;
+
+select fecha, 
+  avg(inscritos) over(order by fecha rows between 2 preceding and 2 following)
+    as prom_inscritos_pm2dias
+from totalInscritos;
+
+
+
